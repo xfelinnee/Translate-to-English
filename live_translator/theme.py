@@ -1,0 +1,8 @@
+BG = "#111316"
+FG = "#f3f4f6"
+DIM = "#8b929a"
+OK = "#4ade80"
+WARN = "#fbbf24"
+PANEL = "#1a1d21"
+FIELD = "#2a2d33"
+KNOB = "#c9ced6"
