@@ -1,5 +1,31 @@
+# Local install and downloads
 .venv/
 models/
-config.json
 __pycache__/
 *.pyc
+
+# Personal settings
+config.json
+
+# Never commit secrets
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*credentials*
+*secret*
+
+# Logs and audio
+*.log
+logs/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+recordings/
+
+# Release builds
+dist/
+*.zip

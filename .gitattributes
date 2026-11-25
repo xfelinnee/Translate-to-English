@@ -4,3 +4,4 @@
 # Not needed in the download zip
 .gitattributes export-ignore
 .gitignore export-ignore
+live_translator/*.in export-ignore

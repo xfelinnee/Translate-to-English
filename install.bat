@@ -39,10 +39,10 @@ if not exist ".venv\Scripts\python.exe" (
     %PY% -m venv .venv || goto :failed
 )
 set "VPY=.venv\Scripts\python.exe"
-"%VPY%" -m pip install --upgrade pip --quiet --disable-pip-version-check
 
+rem Every package is pinned with a SHA-256 hash. pip refuses anything that does not match.
 echo Installing libraries (a few minutes)...
-"%VPY%" -m pip install -r live_translator\requirements.txt --disable-pip-version-check || goto :failed
+"%VPY%" -m pip install --require-hashes --only-binary=:all: -r live_translator\requirements.txt --disable-pip-version-check || goto :failed
 
 where nvidia-smi >nul 2>&1
 if errorlevel 1 (
@@ -51,7 +51,7 @@ if errorlevel 1 (
     echo smaller model: it works, but translations are slower and less accurate.
 ) else (
     echo Installing the NVIDIA GPU libraries ^(about 1 GB^)...
-    "%VPY%" -m pip install -r live_translator\requirements-gpu.txt --disable-pip-version-check || goto :failed
+    "%VPY%" -m pip install --require-hashes --only-binary=:all: -r live_translator\requirements-gpu.txt --disable-pip-version-check || goto :failed
 )
 
 echo.

@@ -27,6 +27,11 @@ plays, the same way a recording program would.
 
 The speech model (about 3 GB) downloads the first time you start it.
 
+Every library the installer downloads is pinned to an exact version and
+checked against its SHA-256 hash, so a tampered package is refused. Each
+release also lists the SHA-256 of its zip (and a `SHA256SUMS.txt`) if you
+want to check your download: `certutil -hashfile Translate-to-English.zip SHA256`
+
 ## Set up Discord (once)
 
 The translator listens to one audio output on your PC. You want the

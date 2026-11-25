@@ -1,0 +1,3 @@
+# CUDA libraries for NVIDIA cards (install.bat only installs these when it finds one).
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4
