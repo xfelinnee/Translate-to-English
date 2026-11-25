@@ -2,6 +2,8 @@
 
 Live English subtitles for Brazilian Portuguese voice chat on Discord.
 
+**[⬇ Download the latest version](https://github.com/xfelinnee/Translate-to-English/releases/latest/download/Translate-to-English.zip)** · [all releases](https://github.com/xfelinnee/Translate-to-English/releases)
+
 People talk in Portuguese, and a second or so after each sentence the English
 shows up in a small window on top of your game. It runs entirely on your own
 PC with OpenAI's Whisper model, so it's free and nothing is uploaded anywhere.
@@ -19,8 +21,8 @@ plays, the same way a recording program would.
 
 ## Install
 
-1. Download this project (green **Code** button → **Download ZIP**) and unzip
-   it somewhere, for example your Documents folder.
+1. **[Download the zip](https://github.com/xfelinnee/Translate-to-English/releases/latest/download/Translate-to-English.zip)** and unzip it
+   somewhere, for example your Documents folder (right-click → Extract All).
 2. Double-click **`install.bat`** and wait a few minutes.
 
 The speech model (about 3 GB) downloads the first time you start it.
