@@ -7,7 +7,7 @@ import tkinter as tk
 from .audio import Segmenter
 from .config import UI_KEYS, save_config
 from .settings_window import SettingsWindow
-from .theme import DIM, FIELD, OK, WARN
+from .theme import DIM, FG, FIELD, OK, WARN
 from .winapi import pretty_hotkey, set_click_through
 
 
@@ -56,10 +56,10 @@ class Overlay:
         self.dot.pack(side="left")
         self.status = tk.Label(bar, fg=DIM, font=("Segoe UI", 9), anchor="w")
         self.status.pack(side="left", padx=(4, 0), fill="x", expand=True)
-        self.close_btn = tk.Label(bar, text="✕", fg=DIM, font=("Segoe UI", 10), cursor="hand2")
-        self.close_btn.bind("<Button-1>", lambda e: self.quit())
-        self.gear = tk.Label(bar, text="⚙", fg=DIM, font=("Segoe UI", 11), cursor="hand2")
-        self.gear.bind("<Button-1>", lambda e: self.open_settings())
+        self.close_btn = tk.Label(bar, text="✕", fg=DIM, font=("Segoe UI", 12), cursor="hand2", padx=4)
+        self.gear = tk.Label(bar, text="⚙", fg=DIM, font=("Segoe UI", 13), cursor="hand2", padx=4)
+        self._buttons = [(self.gear, self.open_settings), (self.close_btn, self.quit)]
+        self._pressed = None
         self.meter = tk.Canvas(bar, width=60, height=6, bg=FIELD, highlightthickness=0)
         self.meter.pack(side="right", padx=8)
         self.meter_bar = self.meter.create_rectangle(0, 0, 0, 6, fill=OK, width=0)
@@ -76,11 +76,15 @@ class Overlay:
         self._bg_widgets = [r, b, bar, self.dot, self.status, self.close_btn, self.gear, self.text, self.grip]
 
         # Where the background is see-through, clicks land on the back panel.
-        for w in (b, bar, self.status, self.dot, self.text):
-            w.bind("<ButtonPress-1>", self._drag_start)
+        # That includes most of the ✕ and ⚙: only the lines of the symbols
+        # themselves are solid, so buttons are hit-tested by position instead.
+        for w in (b, bar, self.status, self.dot, self.text, self.gear, self.close_btn):
+            w.bind("<ButtonPress-1>", self._press)
             w.bind("<B1-Motion>", self._drag_move)
-            w.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
+            w.bind("<ButtonRelease-1>", self._release)
+            w.bind("<Motion>", self._hover)
             w.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
+        b.bind("<Leave>", lambda e: self._hover(None))
 
         self.show_pt = tk.BooleanVar(value=cfg["show_original"])
         self.live_preview = tk.BooleanVar(value=cfg["live_preview"])
@@ -262,12 +266,43 @@ class Overlay:
             self._render()
         self.root.after(1000, self._tick_hide)
 
-    # -- moving and resizing
-    def _drag_start(self, e) -> None:
-        self._dx, self._dy = e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y()
+    # -- buttons, moving and resizing
+    def _button_at(self, x: int, y: int):
+        """The ✕ or ⚙ under the mouse, counting some room around each symbol."""
+        pad = 8
+        best = None
+        for w, action in self._buttons:
+            if not w.winfo_ismapped():
+                continue
+            left, top = w.winfo_rootx(), w.winfo_rooty()
+            right, bottom = left + w.winfo_width(), top + w.winfo_height()
+            if left - pad <= x < right + pad and top - pad <= y < bottom + pad:
+                dist = abs(x - (left + right) / 2) + abs(y - (top + bottom) / 2)
+                if best is None or dist < best[0]:
+                    best = (dist, w, action)
+        return best[1:] if best else None
+
+    def _hover(self, e) -> None:
+        hit = self._button_at(e.x_root, e.y_root) if e is not None else None
+        for w, _ in self._buttons:
+            w.configure(fg=FG if hit and hit[0] is w else DIM)
+        self.back.configure(cursor="hand2" if hit else "fleur")
+
+    def _press(self, e) -> None:
+        self._pressed = self._button_at(e.x_root, e.y_root)
+        if self._pressed is None:
+            self._dx, self._dy = e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y()
+
+    def _release(self, e) -> None:
+        pressed, self._pressed = self._pressed, None
+        if pressed is None:
+            self._save_geometry()
+        elif self._button_at(e.x_root, e.y_root) == pressed:
+            pressed[1]()  # like a normal button: only fires if released on it
 
     def _drag_move(self, e) -> None:
-        self.root.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
+        if self._pressed is None:
+            self.root.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
 
     def _grip_start(self, e) -> None:
         self._gx, self._gy = e.x_root, e.y_root
