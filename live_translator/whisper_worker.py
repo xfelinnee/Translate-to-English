@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .audio import Jobs, to_16k
+from .audio import Jobs
 from .config import MODELS_DIR
 
 # Lines Whisper is known to invent from silence or noise.
@@ -68,9 +68,9 @@ def is_hallucination(text: str, seg) -> bool:
 class WhisperWorker(threading.Thread):
     """Loads Whisper, then turns each finished line of audio into English."""
 
-    def __init__(self, cfg: dict, jobs: Jobs, ui_q: queue.Queue, rate: int, on_ready):
+    def __init__(self, cfg: dict, jobs: Jobs, ui_q: queue.Queue, on_ready):
         super().__init__(daemon=True)
-        self.cfg, self.jobs, self.ui_q, self.rate, self.on_ready = cfg, jobs, ui_q, rate, on_ready
+        self.cfg, self.jobs, self.ui_q, self.on_ready = cfg, jobs, ui_q, on_ready
         self.model = None
 
     def ui(self, *msg) -> None:
@@ -142,11 +142,10 @@ class WhisperWorker(threading.Thread):
             job = self.jobs.get(0.2)
             if job is None:
                 continue
-            kind, audio = job
-            if audio is None:
+            kind, a16 = job  # already 16 kHz
+            if a16 is None:
                 self.ui("preview", "")
                 continue
-            a16 = to_16k(audio, self.rate)
             try:
                 en = self.translate(a16, "translate", final=(kind == "final"))
                 pt = ""

@@ -19,10 +19,15 @@ class Overlay:
     see-through background.
     """
 
-    def __init__(self, cfg: dict, ui_q: queue.Queue, seg: Segmenter | None, device_name: str, devices: list[str]):
+    def __init__(
+        self, cfg: dict, ui_q: queue.Queue, seg: Segmenter | None, device_name: str, devices: list[str],
+        switch_device=None,
+    ):
         self.cfg, self.o, self.ui_q, self.seg = cfg, cfg["overlay"], ui_q, seg
         self.device_name = device_name
         self.devices = devices
+        self.switch_device = switch_device
+        self.mode = ""
         self.lines: list[tuple[str, str, float]] = []  # (english, portuguese, time shown)
         self.preview = ""
         self.ready = False
@@ -223,7 +228,8 @@ class Overlay:
                 elif kind == "ready":
                     self.ready = True
                     self.dot.configure(fg=OK)
-                    self.status_base = f"PT → EN · {args[0]} · {self.device_name}"
+                    self.mode = args[0]
+                    self.status_base = f"PT → EN · {self.mode} · {self.device_name}"
                     self._show_status()
                     self._render()
                 elif kind == "toggle_lock":
@@ -288,6 +294,22 @@ class Overlay:
             self.preview = ""
             self._render()
         save_config(self.cfg, UI_KEYS)
+
+    def change_device(self, name: str) -> str | None:
+        """Start listening to another output right away. Returns an error message, or None."""
+        if name == self.device_name or self.switch_device is None:
+            return None
+        error = self.switch_device(name)
+        if error:
+            return error
+        self.device_name = name
+        self.preview = ""
+        if self.ready:
+            self.status_base = f"PT → EN · {self.mode} · {self.device_name}"
+        self._show_status()
+        self._render()
+        print(f"Listening to: {name}")
+        return None
 
     def save_soon(self) -> None:
         """Save shortly after the last change instead of on every slider tick."""

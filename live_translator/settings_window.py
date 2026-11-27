@@ -5,7 +5,7 @@ from tkinter import colorchooser
 from typing import TYPE_CHECKING
 
 from .config import DEFAULTS, UI_KEYS, save_config
-from .theme import BG, DIM, FG, FIELD, KNOB, OK, PANEL
+from .theme import BG, DIM, FG, FIELD, KNOB, OK, PANEL, WARN
 
 if TYPE_CHECKING:
     from .overlay import Overlay
@@ -56,7 +56,7 @@ class SettingsWindow:
 
         self.heading("Audio")
         self.device_row()
-        self.note("A new output takes effect next time you start the translator.")
+        self.device_note = self.note("The output Discord plays into. Switches right away.")
 
         buttons = tk.Frame(w, bg=PANEL, padx=18, pady=12)
         buttons.pack(fill="x")
@@ -73,11 +73,11 @@ class SettingsWindow:
         )
         self.row += 1
 
-    def note(self, text: str) -> None:
-        tk.Label(self.body, text=text, bg=PANEL, fg=DIM, font=("Segoe UI", 8)).grid(
-            row=self.row, column=0, columnspan=3, sticky="w", pady=(0, 4)
-        )
+    def note(self, text: str) -> tk.Label:
+        label = tk.Label(self.body, text=text, bg=PANEL, fg=DIM, font=("Segoe UI", 8))
+        label.grid(row=self.row, column=0, columnspan=3, sticky="w", pady=(0, 4))
         self.row += 1
+        return label
 
     def label(self, text: str) -> None:
         tk.Label(self.body, text=text, bg=PANEL, fg=FG, font=("Segoe UI", 9)).grid(
@@ -132,14 +132,20 @@ class SettingsWindow:
 
     def device_row(self) -> None:
         self.label("Listen to")
-        names = list(dict.fromkeys(self.ov.devices)) or [self.cfg["audio_device"]]
-        current = next((n for n in names if self.cfg["audio_device"].lower() in n.lower()), names[0])
+        names = list(dict.fromkeys(self.ov.devices)) or [self.ov.device_name]
+        # Show what is actually being recorded, not just what's saved.
+        var = tk.StringVar(value=self.ov.device_name)
 
         def chosen(name: str) -> None:
+            error = self.ov.change_device(name)
+            if error:
+                var.set(self.ov.device_name)
+                self.device_note.configure(text=error, fg=WARN)
+                return
+            self.device_note.configure(text=f"Now listening to {name}.", fg=OK)
             self.cfg["audio_device"] = name
             self.ov.save_soon()
 
-        var = tk.StringVar(value=current)
         self._vars.append(var)
         menu = tk.OptionMenu(self.body, var, *names, command=chosen)
         menu.configure(

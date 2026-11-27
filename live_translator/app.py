@@ -29,6 +29,43 @@ def pick_output(devices: list[dict], wanted: str) -> dict:
             return devices[int(answer) - 1]
 
 
+class Listener:
+    """The audio output currently being recorded. Switching swaps it live.
+
+    Only call listen/switch from the main (Tk) thread: Windows refuses audio
+    streams opened from other threads.
+    """
+
+    def __init__(self, pa: pyaudio.PyAudio, devices: list[dict], audio_q: queue.Queue):
+        self.pa, self.devices, self.q = pa, devices, audio_q
+        self.cap: LoopbackCapture | None = None
+        self.ready = False  # becomes True once the model has loaded
+
+    def listen(self, device: dict) -> None:
+        new = LoopbackCapture(self.pa, device, self.q)
+        new.start()  # raises OSError if Windows won't open it; the old one keeps running
+        if self.cap is not None:
+            self.cap.close()
+            self.q.put(("rate", new.rate))
+        self.cap = new
+        new.enabled = self.ready
+
+    def enable(self) -> None:
+        self.ready = True
+        self.cap.enabled = True
+
+    def switch(self, name: str) -> str | None:
+        """Listen to the output with this name. Returns an error message, or None."""
+        device = next((d for d in self.devices if display_name(d) == name), None)
+        if device is None:
+            return f"{name} not found"
+        try:
+            self.listen(device)
+        except OSError as e:
+            return f"Could not listen to {name}: {e}"
+        return None
+
+
 def main() -> None:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
@@ -51,22 +88,22 @@ def main() -> None:
 
     audio_q: queue.Queue = queue.Queue()
     ui_q: queue.Queue = queue.Queue()
-    cap = LoopbackCapture(pa, device, audio_q)
+    listener = Listener(pa, devices, audio_q)
     try:
-        cap.start()
+        listener.listen(device)
     except OSError as e:
         print(f"Could not listen to {display_name(device)}: {e}")
         input("\nPress Enter to close.")
         return
 
     jobs = Jobs()
-    seg = Segmenter(cfg, cap.rate, audio_q, jobs)
+    seg = Segmenter(cfg, listener.cap.rate, audio_q, jobs)
 
     def on_ready() -> None:
         seg.start()
-        cap.enabled = True
+        listener.enable()
 
-    WhisperWorker(cfg, jobs, ui_q, cap.rate, on_ready).start()
+    WhisperWorker(cfg, jobs, ui_q, on_ready).start()
     GlobalHotkey(
         cfg["lock_hotkey"],
         on_press=lambda: ui_q.put(("toggle_lock",)),
@@ -75,8 +112,9 @@ def main() -> None:
 
     print(f"Listening to: {display_name(device)}")
     print("Translations also show here. Close the overlay or this window to quit.\n")
-    Overlay(cfg, ui_q, seg, display_name(device), [display_name(d) for d in devices]).run()
-    cap.stop()
+    Overlay(cfg, ui_q, seg, display_name(device), [display_name(d) for d in devices], listener.switch).run()
+    listener.cap.close()
+    pa.terminate()
     # The worker threads are blocked in the GPU model and a Windows message
     # loop; exit right away instead of waiting on them.
     os._exit(0)

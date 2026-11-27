@@ -51,14 +51,15 @@ class LoopbackCapture:
             stream_callback=self._callback,
         )
 
-    def stop(self) -> None:
+    def close(self) -> None:
+        self.enabled = False
         try:
             if self.stream is not None:
                 self.stream.stop_stream()
                 self.stream.close()
-            self.pa.terminate()
         except OSError:
             pass
+        self.stream = None
 
 
 def to_16k(audio: np.ndarray, rate: int) -> np.ndarray:
@@ -123,7 +124,11 @@ class Jobs:
 
 
 class Segmenter(threading.Thread):
-    """Splits the audio stream into lines at pauses."""
+    """Splits the audio stream into lines at pauses and hands them on at 16 kHz.
+
+    Put ("rate", new_rate) in the queue after switching to another output: it
+    drops the half-finished line and continues at the new sample rate.
+    """
 
     def __init__(self, cfg: dict, rate: int, in_q: queue.Queue, jobs: Jobs):
         super().__init__(daemon=True)
@@ -148,6 +153,13 @@ class Segmenter(threading.Thread):
                 chunk = self.in_q.get(timeout=0.05)
             except queue.Empty:
                 chunk = None
+            if isinstance(chunk, tuple):  # ("rate", new_rate): output switched
+                rate = self.rate = chunk[1]
+                preroll.clear()
+                preroll_len, preroll_max = 0, int(0.3 * rate)
+                buf, buf_len, voiced_len, speaking = [], 0, 0, False
+                self.jobs.set_preview(None)
+                continue
             now = time.monotonic()
             has_audio = chunk is not None and len(chunk) > 0
 
@@ -192,12 +204,12 @@ class Segmenter(threading.Thread):
             if t - last_voice >= self.cfg["silence_end_seconds"]:
                 audio = np.concatenate(buf)
                 # Under 0.3 s of sound is a click or a key press, not speech.
-                self.jobs.add_final(audio if voiced_len / rate >= 0.3 else None)
+                self.jobs.add_final(to_16k(audio, rate) if voiced_len / rate >= 0.3 else None)
                 speaking, buf, buf_len, voiced_len = False, [], 0, 0
             elif buf_len / rate >= self.cfg["max_segment_seconds"]:
                 audio = np.concatenate(buf)
                 cut = quietest_cut(audio, rate)
-                self.jobs.add_final(audio[:cut])
+                self.jobs.add_final(to_16k(audio[:cut], rate))
                 rest = audio[cut:]
                 buf, buf_len, voiced_len = [rest], len(rest), len(rest)
                 last_preview = t
@@ -206,5 +218,5 @@ class Segmenter(threading.Thread):
                 and buf_len / rate >= self.cfg["preview_start_seconds"]
                 and t - last_preview >= self.cfg["preview_every_seconds"]
             ):
-                self.jobs.set_preview(np.concatenate(buf))
+                self.jobs.set_preview(to_16k(np.concatenate(buf), rate))
                 last_preview = t
